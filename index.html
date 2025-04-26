@@ -357,7 +357,7 @@
                     
                     const hitbox = new THREE.Mesh(geometry, material);
                     const columnIndex = x * BOARD_SIZE + z;
-                    hitbox.userData = { columnIndex };
+                    hitbox.userData = { columnIndex, x, z };
                     
                     const xPos = x * (CELL_SIZE + SPACING) - totalSize / 2 + CELL_SIZE / 2 + SPACING / 2;
                     const zPos = z * (CELL_SIZE + SPACING) - totalSize / 2 + CELL_SIZE / 2 + SPACING / 2;
@@ -367,6 +367,70 @@
                     scene.add(hitbox);
                 }
             }
+
+            // Add direct click event listener to make clicking more reliable
+            renderer.domElement.addEventListener('click', function(event) {
+                if (gameOver || currentPlayer !== 1) return;
+                
+                // Calculate mouse position for raycasting
+                const mouse = new THREE.Vector2();
+                mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+                
+                const raycaster = new THREE.Raycaster();
+                raycaster.setFromCamera(mouse, camera);
+                
+                // First check: Try to use the hovered column first (most reliable)
+                if (hoveredColumn !== null) {
+                    console.log("Clicking on hovered column:", hoveredColumn);
+                    makeMove(hoveredColumn, 1);
+                    return;
+                }
+                
+                // Second check: Direct raycast against columns
+                const intersectsColumns = raycaster.intersectObjects(columnHitboxes);
+                if (intersectsColumns.length > 0) {
+                    const columnIndex = intersectsColumns[0].object.userData.columnIndex;
+                    console.log("Clicked column:", columnIndex);
+                    makeMove(columnIndex, 1);
+                }
+            });
+            
+            // Add touch event for mobile
+            renderer.domElement.addEventListener('touchend', function(event) {
+                if (gameOver || currentPlayer !== 1) return;
+                
+                // Prevent default behavior
+                event.preventDefault();
+                
+                // Use last touch coordinates
+                if (event.changedTouches && event.changedTouches.length > 0) {
+                    const touch = event.changedTouches[0];
+                    
+                    // Calculate touch position
+                    const mouse = new THREE.Vector2();
+                    mouse.x = (touch.clientX / window.innerWidth) * 2 - 1;
+                    mouse.y = -(touch.clientY / window.innerHeight) * 2 + 1;
+                    
+                    const raycaster = new THREE.Raycaster();
+                    raycaster.setFromCamera(mouse, camera);
+                    
+                    // First check: use the hovered column if available
+                    if (hoveredColumn !== null) {
+                        console.log("Touching hovered column:", hoveredColumn);
+                        makeMove(hoveredColumn, 1);
+                        return;
+                    }
+                    
+                    // Second check: Direct raycast against columns
+                    const intersectsColumns = raycaster.intersectObjects(columnHitboxes);
+                    if (intersectsColumns.length > 0) {
+                        const columnIndex = intersectsColumns[0].object.userData.columnIndex;
+                        console.log("Touched column:", columnIndex);
+                        makeMove(columnIndex, 1);
+                    }
+                }
+            });
         }
         
         // Handle window resize
@@ -1053,6 +1117,37 @@
             
             // If it's a short distance move and not actively rotating, process as click
             if (isClick && !isRotating && (Date.now() - lastRotationTime > rotationGracePeriod)) {
+                // SHORTCUT: If a column is currently highlighted, just use that column directly
+                // This is especially helpful on mobile where precision clicking is hard
+                if (hoveredColumn !== null && !gameOver && currentPlayer === 1) {
+                    // Get the column position for visual feedback
+                    const x = Math.floor(hoveredColumn / BOARD_SIZE);
+                    const z = hoveredColumn % BOARD_SIZE;
+                    
+                    // Find the highest empty position
+                    let topY = 0;
+                    for (let y = 0; y < BOARD_SIZE; y++) {
+                        if (gameBoard[x][y][z] === 0) {
+                            topY = y;
+                            break;
+                        }
+                    }
+                    
+                    // Get position for visual feedback
+                    const totalSize = BOARD_SIZE * (CELL_SIZE + SPACING);
+                    const xPos = x * (CELL_SIZE + SPACING) - totalSize / 2 + CELL_SIZE / 2 + SPACING / 2;
+                    const yPos = topY * (CELL_SIZE + SPACING) - totalSize / 2 + CELL_SIZE / 2 + SPACING / 2;
+                    const zPos = z * (CELL_SIZE + SPACING) - totalSize / 2 + CELL_SIZE / 2 + SPACING / 2;
+                    
+                    // Show feedback
+                    playClickFeedback(new THREE.Vector3(xPos, yPos, zPos));
+                    
+                    // Make the move
+                    makeMove(hoveredColumn, 1);
+                    return;
+                }
+                
+                // Fallback to regular click processing
                 if (event.type === 'touchend') {
                     // For touch events, create a synthetic mouse event
                     const syntheticEvent = {
@@ -1467,4 +1562,3 @@
     </script>
 </body>
 </html> 
-
