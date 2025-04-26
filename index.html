@@ -372,6 +372,20 @@
             renderer.domElement.addEventListener('click', function(event) {
                 if (gameOver || currentPlayer !== 1) return;
                 
+                // Only check for active rotation, not the cooldown period
+                // This allows clicks right after rotation stops
+                if (isRotating) {
+                    console.log("Ignoring click because actively rotating");
+                    return;
+                }
+                
+                // Use a much shorter rotation cooldown
+                const rotationCooldown = 150; // ms - reduced from 300ms
+                if (Date.now() - lastRotationTime < rotationCooldown) {
+                    console.log("Recently rotated, being extra careful with click");
+                    // Don't return here, but be more careful below
+                }
+                
                 // Calculate mouse position for raycasting
                 const mouse = new THREE.Vector2();
                 mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
@@ -380,19 +394,32 @@
                 const raycaster = new THREE.Raycaster();
                 raycaster.setFromCamera(mouse, camera);
                 
-                // First check: Try to use the hovered column first (most reliable)
-                if (hoveredColumn !== null) {
-                    console.log("Clicking on hovered column:", hoveredColumn);
-                    makeMove(hoveredColumn, 1);
-                    return;
-                }
-                
-                // Second check: Direct raycast against columns
+                // PRIORITY CHANGE: Always check for directly clicked columns first
                 const intersectsColumns = raycaster.intersectObjects(columnHitboxes);
                 if (intersectsColumns.length > 0) {
                     const columnIndex = intersectsColumns[0].object.userData.columnIndex;
-                    console.log("Clicked column:", columnIndex);
-                    makeMove(columnIndex, 1);
+                    console.log("Directly clicked column:", columnIndex);
+                    
+                    // If we're in the rotation cooldown period, make sure this is an accurate click
+                    if (Date.now() - lastRotationTime < rotationCooldown) {
+                        // Only allow clicks on highlighted columns during cooldown
+                        if (hoveredColumn === columnIndex) {
+                            makeMove(columnIndex, 1);
+                        } else {
+                            console.log("Ignoring click during cooldown on non-highlighted column");
+                        }
+                    } else {
+                        // Normal case - make the move
+                        makeMove(columnIndex, 1);
+                    }
+                    return;
+                }
+                
+                // Check hovered column as fallback
+                if (hoveredColumn !== null) {
+                    console.log("Using hovered column:", hoveredColumn);
+                    makeMove(hoveredColumn, 1);
+                    return;
                 }
             });
             
@@ -400,10 +427,20 @@
             renderer.domElement.addEventListener('touchend', function(event) {
                 if (gameOver || currentPlayer !== 1) return;
                 
+                // Only check for active rotation, not the cooldown period
+                if (isRotating) {
+                    console.log("Ignoring touch because actively rotating");
+                    return;
+                }
+                
+                // Use a shorter rotation cooldown
+                const rotationCooldown = 200; // ms - reduced from 400ms
+                const inCooldown = Date.now() - lastRotationTime < rotationCooldown;
+                
                 // Prevent default behavior
                 event.preventDefault();
                 
-                // Use last touch coordinates
+                // Process the touch if we have valid coordinates
                 if (event.changedTouches && event.changedTouches.length > 0) {
                     const touch = event.changedTouches[0];
                     
@@ -415,19 +452,32 @@
                     const raycaster = new THREE.Raycaster();
                     raycaster.setFromCamera(mouse, camera);
                     
-                    // First check: use the hovered column if available
-                    if (hoveredColumn !== null) {
-                        console.log("Touching hovered column:", hoveredColumn);
-                        makeMove(hoveredColumn, 1);
-                        return;
-                    }
-                    
-                    // Second check: Direct raycast against columns
+                    // PRIORITY CHANGE: Direct column detection first
                     const intersectsColumns = raycaster.intersectObjects(columnHitboxes);
                     if (intersectsColumns.length > 0) {
                         const columnIndex = intersectsColumns[0].object.userData.columnIndex;
-                        console.log("Touched column:", columnIndex);
-                        makeMove(columnIndex, 1);
+                        console.log("Directly touched column:", columnIndex);
+                        
+                        // If in cooldown, be more careful
+                        if (inCooldown) {
+                            // Only allow touches on highlighted columns during cooldown
+                            if (hoveredColumn === columnIndex) {
+                                makeMove(columnIndex, 1);
+                            } else {
+                                console.log("Ignoring touch during cooldown on non-highlighted column");
+                            }
+                        } else {
+                            // Normal case - make the move
+                            makeMove(columnIndex, 1);
+                        }
+                        return;
+                    }
+                    
+                    // Use hovered column as fallback
+                    if (hoveredColumn !== null) {
+                        console.log("Using hovered column:", hoveredColumn);
+                        makeMove(hoveredColumn, 1);
+                        return;
                     }
                 }
             });
