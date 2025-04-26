@@ -237,14 +237,22 @@
             renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
             
             // Reset button
-            document.getElementById('resetBtn').addEventListener('click', resetGame);
+            document.getElementById('resetBtn').addEventListener('click', function(e) {
+                // Stop event propagation to prevent clicks passing through to the game
+                e.stopPropagation();
+                resetGame();
+            });
             document.getElementById('resetBtn').addEventListener('touchend', function(e) {
+                // Stop event propagation to prevent touches passing through to the game
+                e.stopPropagation();
                 e.preventDefault();
                 resetGame();
             });
             
             // Spacing slider
             document.getElementById('spacing-slider').addEventListener('input', (e) => {
+                // Stop propagation to prevent clicks passing through
+                e.stopPropagation();
                 // Convert slider value (0-100) to a scale factor (0.5-1.5)
                 GLOBAL_SCALE = 0.5 + (e.target.value / 100) * 1.0;
                 updateSceneScale();
@@ -433,16 +441,26 @@
                     return;
                 }
                 
-                // Use a shorter rotation cooldown
-                const rotationCooldown = 200; // ms - reduced from 400ms
-                const inCooldown = Date.now() - lastRotationTime < rotationCooldown;
-                
                 // Prevent default behavior
                 event.preventDefault();
                 
                 // Process the touch if we have valid coordinates
                 if (event.changedTouches && event.changedTouches.length > 0) {
                     const touch = event.changedTouches[0];
+                    
+                    // MOBILE IMPROVEMENT: Check if this was a swipe rather than a tap
+                    if (pointerStartPosition) {
+                        const dx = touch.clientX - pointerStartPosition.x;
+                        const dy = touch.clientY - pointerStartPosition.y;
+                        const moveDistance = Math.sqrt(dx * dx + dy * dy);
+                        const touchDuration = Date.now() - pointerDownTime;
+                        
+                        // If moved more than 20px and lasted longer than 120ms, consider it a swipe
+                        if (moveDistance > 20 && touchDuration > 120) {
+                            console.log("Ignoring touch - looks like a swipe");
+                            return;
+                        }
+                    }
                     
                     // Calculate touch position
                     const mouse = new THREE.Vector2();
@@ -458,26 +476,41 @@
                         const columnIndex = intersectsColumns[0].object.userData.columnIndex;
                         console.log("Directly touched column:", columnIndex);
                         
-                        // If in cooldown, be more careful
-                        if (inCooldown) {
-                            // Only allow touches on highlighted columns during cooldown
-                            if (hoveredColumn === columnIndex) {
-                                makeMove(columnIndex, 1);
-                            } else {
-                                console.log("Ignoring touch during cooldown on non-highlighted column");
-                            }
-                        } else {
-                            // Normal case - make the move
-                            makeMove(columnIndex, 1);
-                        }
+                        // MOBILE IMPROVEMENT: More forgiving - always make the move if it's a tap on a column
+                        makeMove(columnIndex, 1);
                         return;
                     }
                     
-                    // Use hovered column as fallback
+                    // MOBILE IMPROVEMENT: Use hovered column more aggressively 
+                    // This makes it much easier to tap on mobile
                     if (hoveredColumn !== null) {
-                        console.log("Using hovered column:", hoveredColumn);
+                        console.log("Using hovered column for mobile tap:", hoveredColumn);
                         makeMove(hoveredColumn, 1);
                         return;
+                    }
+                    
+                    // MOBILE IMPROVEMENT: Additional raycasting with wider tolerance
+                    // If we didn't hit a column directly, try with a bit of leeway
+                    // This simulates having "fatter fingers" on mobile
+                    for (let xOffset = -0.05; xOffset <= 0.05; xOffset += 0.05) {
+                        for (let yOffset = -0.05; yOffset <= 0.05; yOffset += 0.05) {
+                            if (xOffset === 0 && yOffset === 0) continue; // Skip center as we already checked it
+                            
+                            const offsetMouse = new THREE.Vector2(
+                                mouse.x + xOffset,
+                                mouse.y + yOffset
+                            );
+                            
+                            raycaster.setFromCamera(offsetMouse, camera);
+                            const widerIntersects = raycaster.intersectObjects(columnHitboxes);
+                            
+                            if (widerIntersects.length > 0) {
+                                const columnIndex = widerIntersects[0].object.userData.columnIndex;
+                                console.log("Found column with wider tolerance:", columnIndex);
+                                makeMove(columnIndex, 1);
+                                return;
+                            }
+                        }
                     }
                 }
             });
