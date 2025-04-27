@@ -1125,7 +1125,7 @@
                     count++;
                     nx += directions[i][0];
                     ny += directions[i][1];
-                    ny += directions[i][2];
+                    nz += directions[i][2];
                 }
                 
                 // Check in negative direction
@@ -1145,8 +1145,9 @@
                     nz += directions[i+1][2];
                 }
                 
-                // If we found 4 in a row, highlight them and return true
+                // If we found 4 in a row, return true
                 if (count >= 4) {
+                    console.log(`Win detected for player ${player} in direction ${directions[i]} / ${directions[i+1]}`);
                     return true;
                 }
             }
@@ -1355,6 +1356,7 @@
                 
                 // If we found 4 in a row, return the positions
                 if (count >= 4) {
+                    console.log(`Returning ${positions.length} winning positions for player ${player}`);
                     return positions;
                 }
             }
