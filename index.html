@@ -21,11 +21,9 @@
             font-size: 24px;
             z-index: 100;
         }
-        #resetBtn {
+        #resetBtn, #modeBtn {
             position: absolute;
             bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
             padding: 15px 30px; /* Larger touch target */
             background-color: white;
             color: black;
@@ -37,13 +35,32 @@
             transition: background-color 0.3s, transform 0.1s;
             -webkit-tap-highlight-color: transparent; /* Remove tap highlight on mobile */
         }
+        #resetBtn {
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        #modeBtn {
+            right: 20px;
+        }
         #resetBtn:hover {
             background-color: #f0f0f0;
             transform: translateX(-50%) scale(1.05);
         }
+        #modeBtn:hover {
+            background-color: #f0f0f0;
+            transform: scale(1.05);
+        }
         #resetBtn:active {
             background-color: #e0e0e0;
             transform: translateX(-50%) scale(0.98);
+        }
+        #modeBtn:active {
+            background-color: #e0e0e0;
+            transform: scale(0.98);
+        }
+        #modeBtn.active {
+            background-color: #4488ff;
+            color: white;
         }
         #controls {
             position: absolute;
@@ -65,9 +82,12 @@
                 font-size: 20px;
                 top: 5px;
             }
-            #resetBtn {
+            #resetBtn, #modeBtn {
                 bottom: 15px;
                 padding: 12px 24px;
+            }
+            #modeBtn {
+                right: 10px;
             }
             #controls {
                 bottom: 70px;
@@ -95,6 +115,79 @@
             background: #4444aa;
             border-radius: 5px;
         }
+        #button-container {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            gap: 15px;
+            z-index: 100;
+        }
+        .toggle-group {
+            display: flex;
+            background-color: rgba(0, 0, 0, 0.6);
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+        }
+        .toggle-group button {
+            background-color: transparent;
+            border: none;
+            padding: 10px 25px;
+            cursor: pointer;
+            color: white;
+            font-weight: bold;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        .toggle-group button.active {
+            background-color: rgba(68, 136, 255, 0.8);
+        }
+        #resetButton {
+            background-color: rgba(255, 90, 90, 0.8);
+            border: none;
+            color: white;
+            padding: 12px 30px;
+            font-weight: bold;
+            font-size: 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+        }
+        #resetButton:hover {
+            background-color: rgba(255, 60, 60, 1);
+        }
+        /* Add player mode selector at top */
+        #player-mode-container {
+            position: absolute;
+            top: 60px;
+            right: 20px;
+            z-index: 100;
+        }
+        #player-mode-group {
+            display: flex;
+            background-color: rgba(0, 0, 0, 0.6);
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+        }
+        #player-mode-group button {
+            background-color: transparent;
+            border: none;
+            padding: 10px 25px;
+            cursor: pointer;
+            color: white;
+            font-weight: bold;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        #player-mode-group button.active {
+            background-color: rgba(68, 136, 255, 0.8);
+        }
     </style>
 </head>
 <body>
@@ -103,7 +196,13 @@
         <input type="range" id="spacing-slider" min="0" max="100" value="50">
         <span>Cube Scaling</span>
     </div>
-    <button id="resetBtn">Reset Game</button>
+    <div id="button-container">
+        <div class="toggle-group">
+            <button id="onePlayerButton" class="active">1P</button>
+            <button id="twoPlayerButton">2P</button>
+        </div>
+        <button id="resetButton">Reset Game</button>
+    </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -119,6 +218,7 @@
         let gameBoard = createEmptyBoard();
         let currentPlayer = 1; // 1 = Human (red), 2 = AI (blue)
         let gameOver = false;
+        let isTwoPlayerMode = false; // Flag for game mode
         
         // Three.js variables
         let scene, camera, renderer;
@@ -145,6 +245,13 @@
         
         // Add mobile detection
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        
+        // Store references to our event handlers so we can remove them later
+        let clickHandler = null;
+        let touchEndHandler = null;
+        
+        // Add a flag to track if a move is in progress
+        let moveInProgress = false;
         
         // Initialize the game
         init();
@@ -221,32 +328,47 @@
                 controls.enableZoom = true;
                 controls.zoomSpeed = 0.5; // Slower zoom for better control
                 
-                // Touch events
+                // Touch events - only keep mousemove for hover effects
                 window.addEventListener('touchstart', onPointerDown);
-                window.addEventListener('touchend', onPointerUp);
                 window.addEventListener('touchmove', onMouseMove);
             } else {
-                // Desktop events
-                window.addEventListener('click', onMouseClick);
+                // Desktop events - only keep mousemove for hover effects
                 window.addEventListener('mousemove', onMouseMove);
                 window.addEventListener('mousedown', onPointerDown);
-                window.addEventListener('mouseup', onPointerUp);
             }
             
             // Prevent context menu on right-click
             renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
             
             // Reset button
-            document.getElementById('resetBtn').addEventListener('click', function(e) {
+            document.getElementById('resetButton').addEventListener('click', function(e) {
                 // Stop event propagation to prevent clicks passing through to the game
                 e.stopPropagation();
                 resetGame();
             });
-            document.getElementById('resetBtn').addEventListener('touchend', function(e) {
+            document.getElementById('resetButton').addEventListener('touchend', function(e) {
                 // Stop event propagation to prevent touches passing through to the game
                 e.stopPropagation();
                 e.preventDefault();
                 resetGame();
+            });
+            
+            // Two-player mode button
+            document.getElementById('twoPlayerButton').addEventListener('click', function(e) {
+                e.stopPropagation();
+            });
+            document.getElementById('twoPlayerButton').addEventListener('touchend', function(e) {
+                e.stopPropagation();
+                e.preventDefault();
+            });
+            
+            // One-player mode button
+            document.getElementById('onePlayerButton').addEventListener('click', function(e) {
+                e.stopPropagation();
+            });
+            document.getElementById('onePlayerButton').addEventListener('touchend', function(e) {
+                e.stopPropagation();
+                e.preventDefault();
             });
             
             // Spacing slider
@@ -270,6 +392,51 @@
 
             // Apply initial scene scale
             updateSceneScale();
+
+            // Initialize at document load
+            document.addEventListener('DOMContentLoaded', function() {
+                // Set the initial active button based on mode
+                const onePlayerButton = document.getElementById('onePlayerButton');
+                const twoPlayerButton = document.getElementById('twoPlayerButton');
+                const resetButton = document.getElementById('resetButton');
+                
+                if (isTwoPlayerMode) {
+                    twoPlayerButton.classList.add('active');
+                    onePlayerButton.classList.remove('active');
+                } else {
+                    onePlayerButton.classList.add('active');
+                    twoPlayerButton.classList.remove('active');
+                }
+                
+                // Setup event listeners for buttons
+                onePlayerButton.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    isTwoPlayerMode = false;
+                    onePlayerButton.classList.add('active');
+                    twoPlayerButton.classList.remove('active');
+                    resetGame();
+                    updateInfo("Player 1's Turn (Red)");
+                });
+                
+                twoPlayerButton.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    isTwoPlayerMode = true;
+                    twoPlayerButton.classList.add('active');
+                    onePlayerButton.classList.remove('active');
+                    resetGame();
+                    updateInfo("Player 1's Turn (Red)");
+                });
+                
+                resetButton.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    resetGame();
+                    if (isTwoPlayerMode) {
+                        updateInfo("Player 1's Turn (Red)");
+                    } else {
+                        updateInfo("Your Turn");
+                    }
+                });
+            });
         }
         
         // Create the grid structure with cubes
@@ -376,23 +543,26 @@
                 }
             }
 
-            // Add direct click event listener to make clicking more reliable
-            renderer.domElement.addEventListener('click', function(event) {
-                if (gameOver || currentPlayer !== 1) return;
+            // IMPORTANT: Remove any existing event listeners to prevent duplicates
+            if (clickHandler) {
+                renderer.domElement.removeEventListener('click', clickHandler);
+            }
+            if (touchEndHandler) {
+                renderer.domElement.removeEventListener('touchend', touchEndHandler);
+            }
+
+            // Define our new click handler
+            clickHandler = function(event) {
+                // Don't process clicks if the game is over
+                if (gameOver) return;
                 
-                // Only check for active rotation, not the cooldown period
-                // This allows clicks right after rotation stops
-                if (isRotating) {
-                    console.log("Ignoring click because actively rotating");
-                    return;
-                }
+                // In one-player mode, only player 1 can make clicks
+                if (!isTwoPlayerMode && currentPlayer !== 1) return;
                 
-                // Use a much shorter rotation cooldown
-                const rotationCooldown = 150; // ms - reduced from 300ms
-                if (Date.now() - lastRotationTime < rotationCooldown) {
-                    console.log("Recently rotated, being extra careful with click");
-                    // Don't return here, but be more careful below
-                }
+                // Don't process clicks during rotation
+                if (isRotating) return;
+                
+                console.log("Handling click, current player:", currentPlayer);
                 
                 // Calculate mouse position for raycasting
                 const mouse = new THREE.Vector2();
@@ -402,65 +572,60 @@
                 const raycaster = new THREE.Raycaster();
                 raycaster.setFromCamera(mouse, camera);
                 
-                // PRIORITY CHANGE: Always check for directly clicked columns first
+                // Clear highlight
+                clearHighlight();
+                
+                // First check for directly clicked columns
                 const intersectsColumns = raycaster.intersectObjects(columnHitboxes);
                 if (intersectsColumns.length > 0) {
                     const columnIndex = intersectsColumns[0].object.userData.columnIndex;
-                    console.log("Directly clicked column:", columnIndex);
+                    console.log("Processing click on column:", columnIndex);
                     
-                    // If we're in the rotation cooldown period, make sure this is an accurate click
-                    if (Date.now() - lastRotationTime < rotationCooldown) {
-                        // Only allow clicks on highlighted columns during cooldown
-                        if (hoveredColumn === columnIndex) {
-                            makeMove(columnIndex, 1);
-                        } else {
-                            console.log("Ignoring click during cooldown on non-highlighted column");
-                        }
-                    } else {
-                        // Normal case - make the move
-                        makeMove(columnIndex, 1);
-                    }
+                    // Make the move with current player
+                    handleMoveAttempt(columnIndex);
                     return;
                 }
                 
-                // Check hovered column as fallback
+                // Then check for cube intersections
+                const intersectsCubes = raycaster.intersectObjects(cubes);
+                if (intersectsCubes.length > 0) {
+                    const cube = intersectsCubes[0].object;
+                    const { x, z } = cube.userData;
+                    const columnIndex = x * BOARD_SIZE + z;
+                    
+                    console.log("Processing click on cube:", columnIndex);
+                    
+                    // Make the move with current player
+                    handleMoveAttempt(columnIndex);
+                    return;
+                }
+                
+                // If hoveredColumn is set, use that
                 if (hoveredColumn !== null) {
                     console.log("Using hovered column:", hoveredColumn);
-                    makeMove(hoveredColumn, 1);
-                    return;
+                    handleMoveAttempt(hoveredColumn);
                 }
-            });
+            };
             
-            // Add touch event for mobile
-            renderer.domElement.addEventListener('touchend', function(event) {
-                if (gameOver || currentPlayer !== 1) return;
+            // Define our new touch handler
+            touchEndHandler = function(event) {
+                // Don't process if game is over
+                if (gameOver) return;
                 
-                // Only check for active rotation, not the cooldown period
-                if (isRotating) {
-                    console.log("Ignoring touch because actively rotating");
-                    return;
-                }
+                // In one-player mode, only player 1 can make clicks
+                if (!isTwoPlayerMode && currentPlayer !== 1) return;
                 
-                // Prevent default behavior
+                // Don't process during rotation
+                if (isRotating) return;
+                
+                console.log("Handling touch, current player:", currentPlayer);
+                
+                // Prevent default to avoid double-firing
                 event.preventDefault();
                 
                 // Process the touch if we have valid coordinates
                 if (event.changedTouches && event.changedTouches.length > 0) {
                     const touch = event.changedTouches[0];
-                    
-                    // MOBILE IMPROVEMENT: Check if this was a swipe rather than a tap
-                    if (pointerStartPosition) {
-                        const dx = touch.clientX - pointerStartPosition.x;
-                        const dy = touch.clientY - pointerStartPosition.y;
-                        const moveDistance = Math.sqrt(dx * dx + dy * dy);
-                        const touchDuration = Date.now() - pointerDownTime;
-                        
-                        // If moved more than 20px and lasted longer than 120ms, consider it a swipe
-                        if (moveDistance > 20 && touchDuration > 120) {
-                            console.log("Ignoring touch - looks like a swipe");
-                            return;
-                        }
-                    }
                     
                     // Calculate touch position
                     const mouse = new THREE.Vector2();
@@ -470,50 +635,45 @@
                     const raycaster = new THREE.Raycaster();
                     raycaster.setFromCamera(mouse, camera);
                     
-                    // PRIORITY CHANGE: Direct column detection first
+                    // Clear highlight
+                    clearHighlight();
+                    
+                    // Direct column detection
                     const intersectsColumns = raycaster.intersectObjects(columnHitboxes);
                     if (intersectsColumns.length > 0) {
                         const columnIndex = intersectsColumns[0].object.userData.columnIndex;
-                        console.log("Directly touched column:", columnIndex);
+                        console.log("Processing touch on column:", columnIndex);
                         
-                        // MOBILE IMPROVEMENT: More forgiving - always make the move if it's a tap on a column
-                        makeMove(columnIndex, 1);
+                        // Make the move with current player
+                        handleMoveAttempt(columnIndex);
                         return;
                     }
                     
-                    // MOBILE IMPROVEMENT: Use hovered column more aggressively 
-                    // This makes it much easier to tap on mobile
+                    // Then check for cube intersections
+                    const intersectsCubes = raycaster.intersectObjects(cubes);
+                    if (intersectsCubes.length > 0) {
+                        const cube = intersectsCubes[0].object;
+                        const { x, z } = cube.userData;
+                        const columnIndex = x * BOARD_SIZE + z;
+                        
+                        console.log("Processing touch on cube:", columnIndex);
+                        
+                        // Make the move with current player
+                        handleMoveAttempt(columnIndex);
+                        return;
+                    }
+                    
+                    // If hoveredColumn is set, use that
                     if (hoveredColumn !== null) {
-                        console.log("Using hovered column for mobile tap:", hoveredColumn);
-                        makeMove(hoveredColumn, 1);
-                        return;
-                    }
-                    
-                    // MOBILE IMPROVEMENT: Additional raycasting with wider tolerance
-                    // If we didn't hit a column directly, try with a bit of leeway
-                    // This simulates having "fatter fingers" on mobile
-                    for (let xOffset = -0.05; xOffset <= 0.05; xOffset += 0.05) {
-                        for (let yOffset = -0.05; yOffset <= 0.05; yOffset += 0.05) {
-                            if (xOffset === 0 && yOffset === 0) continue; // Skip center as we already checked it
-                            
-                            const offsetMouse = new THREE.Vector2(
-                                mouse.x + xOffset,
-                                mouse.y + yOffset
-                            );
-                            
-                            raycaster.setFromCamera(offsetMouse, camera);
-                            const widerIntersects = raycaster.intersectObjects(columnHitboxes);
-                            
-                            if (widerIntersects.length > 0) {
-                                const columnIndex = widerIntersects[0].object.userData.columnIndex;
-                                console.log("Found column with wider tolerance:", columnIndex);
-                                makeMove(columnIndex, 1);
-                                return;
-                            }
-                        }
+                        console.log("Using hovered column for touch:", hoveredColumn);
+                        handleMoveAttempt(hoveredColumn);
                     }
                 }
-            });
+            };
+            
+            // Add our new event listeners
+            renderer.domElement.addEventListener('click', clickHandler);
+            renderer.domElement.addEventListener('touchend', touchEndHandler);
         }
         
         // Handle window resize
@@ -523,17 +683,10 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         }
         
-        // Handle mouse click
-        function onMouseClick(event) {
-            // Only process the click if not in a rotation and not right after rotation
-            if (!isRotating && (Date.now() - lastRotationTime > 100)) {
-                processClick(event);
-            }
-        }
-        
         // Update the mouse move handler to work with both mouse and touch events
         function onMouseMove(event) {
-            if (gameOver || currentPlayer !== 1) return;
+            // Allow highlighting for both players in two-player mode
+            if (gameOver || (!isTwoPlayerMode && currentPlayer !== 1)) return;
             
             // Get the correct client coordinates
             let clientX, clientY;
@@ -610,30 +763,19 @@
                 if (playerId === 1) {
                     updateInfo("Column is full! Try another.");
                 }
+                moveInProgress = false;
                 return false;
             }
+            
+            // Clear highlight always
+            clearHighlight();
+            hoveredColumn = null;
             
             // Update game board
             gameBoard[x][y][z] = playerId;
             
-            // Add piece and maintain column highlighting
-            if (playerId === 1) {
-                // For player moves, highlight the target column during the drop
-                if (hoveredColumn === columnIndex) {
-                    // Column already highlighted, maintain it
-                    // Don't clear highlights during this move
-                    addPiece(x, y, z, playerId);
-                } else {
-                    // Column not highlighted, temporarily highlight it
-                    clearHighlight();
-                    highlightColumn(columnIndex);
-                    addPiece(x, y, z, playerId);
-                }
-            } else {
-                // For AI moves, don't highlight
-                clearHighlight();
-                addPiece(x, y, z, playerId);
-            }
+            // Add piece
+            addPiece(x, y, z, playerId);
             
             // Check for win
             if (checkWin(x, y, z, playerId)) {
@@ -646,10 +788,15 @@
                 highlightWinningPieces(winningPositions);
                 
                 if (playerId === 1) {
-                    updateInfo("You win! Click Reset to play again.");
+                    updateInfo("Player 1 wins! Click Reset to play again.");
                 } else {
-                    updateInfo("AI wins! Click Reset to play again.");
+                    if (isTwoPlayerMode) {
+                        updateInfo("Player 2 wins! Click Reset to play again.");
+                    } else {
+                        updateInfo("AI wins! Click Reset to play again.");
+                    }
                 }
+                moveInProgress = false;
                 return true;
             }
             
@@ -657,21 +804,32 @@
             if (checkDraw()) {
                 gameOver = true;
                 updateInfo("Draw! Click Reset to play again.");
+                moveInProgress = false;
                 return true;
             }
             
             // Switch player
             if (playerId === 1) {
                 currentPlayer = 2;
-                updateInfo("AI is thinking...");
                 
-                // AI makes move after delay
-                setTimeout(() => {
-                    makeAIMove();
-                }, 700);
+                if (isTwoPlayerMode) {
+                    // In two-player mode, player 2's turn (blue)
+                    updateInfo("Player 2's Turn (Blue)");
+                    moveInProgress = false;
+                } else {
+                    // In one-player mode, have AI make a move
+                    updateInfo("AI is thinking...");
+                    
+                    // AI makes move after delay
+                    setTimeout(() => {
+                        makeAIMove();
+                        moveInProgress = false;
+                    }, 700);
+                }
             } else {
                 currentPlayer = 1;
-                updateInfo("Your turn");
+                updateInfo("Player 1's Turn (Red)");
+                moveInProgress = false;
             }
             
             return true;
@@ -952,10 +1110,21 @@
             }
             pieces = [];
             
+            // Clear any highlighting
+            clearHighlight();
+            hoveredColumn = null;
+            
             // Reset game state
             currentPlayer = 1;
             gameOver = false;
-            updateInfo("Your Turn");
+            moveInProgress = false; // Reset move in progress flag
+            
+            // Update the info message based on game mode
+            if (isTwoPlayerMode) {
+                updateInfo("Player 1's Turn (Red)");
+            } else {
+                updateInfo("Your Turn");
+            }
         }
         
         // Animation loop
@@ -1153,224 +1322,40 @@
             }
         }
 
-        // Fix the pointer up handler to handle touch events
-        function onPointerUp(event) {
-            const pointerUpTime = Date.now();
+        // Create a simple wrapper around the makeMove function to ensure we only move once
+        function handleMoveAttempt(columnIndex) {
+            // Check if move is valid before attempting
+            const x = Math.floor(columnIndex / BOARD_SIZE);
+            const z = columnIndex % BOARD_SIZE;
             
-            // Get the correct position based on event type
-            let pointerUpPosition;
-            if (event.type === 'touchend') {
-                // For touch events, we need the last known position
-                // since touchend doesn't have coordinates
-                if (event.changedTouches && event.changedTouches.length > 0) {
-                    pointerUpPosition = {
-                        x: event.changedTouches[0].clientX,
-                        y: event.changedTouches[0].clientY
-                    };
-                } else {
-                    // If we can't get the position, use the start position
-                    // This will effectively make any touch a click
-                    pointerUpPosition = pointerStartPosition;
+            // If a move is already in progress, ignore this attempt
+            if (moveInProgress) {
+                console.log("Ignoring move attempt - move already in progress");
+                return;
+            }
+            
+            // Set the flag to prevent multiple moves
+            moveInProgress = true;
+            
+            // Check if column is full
+            let isValid = false;
+            let lowestY = -1;
+            for (let y = 0; y < BOARD_SIZE; y++) {
+                if (gameBoard[x][y][z] === 0) {
+                    isValid = true;
+                    lowestY = y;
+                    break;
                 }
-                
-                // Prevent default to avoid double-firing events on some mobile browsers
-                event.preventDefault();
+            }
+            
+            if (isValid) {
+                // Make the move with current player
+                makeMove(columnIndex, currentPlayer);
             } else {
-                pointerUpPosition = { x: event.clientX, y: event.clientY };
+                updateInfo("Column is full! Try another.");
+                // Reset move in progress flag
+                moveInProgress = false;
             }
-            
-            // Calculate distance moved
-            const dx = pointerUpPosition.x - pointerStartPosition.x;
-            const dy = pointerUpPosition.y - pointerStartPosition.y;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            
-            // Calculate time held
-            const pressDuration = pointerUpTime - pointerDownTime;
-            
-            // Consider it as a click only if the pointer moved less than threshold
-            // Use a larger threshold for mobile
-            const clickThreshold = isMobile ? 20 : 10;
-            const isClick = distance < clickThreshold;
-            
-            // Reset pointer state
-            pointerIsDown = false;
-            
-            // For mobile, be more forgiving about rotation vs. click
-            const rotationGracePeriod = isMobile ? 100 : 300;
-            
-            // If it's a short distance move and not actively rotating, process as click
-            if (isClick && !isRotating && (Date.now() - lastRotationTime > rotationGracePeriod)) {
-                // SHORTCUT: If a column is currently highlighted, just use that column directly
-                // This is especially helpful on mobile where precision clicking is hard
-                if (hoveredColumn !== null && !gameOver && currentPlayer === 1) {
-                    // Get the column position for visual feedback
-                    const x = Math.floor(hoveredColumn / BOARD_SIZE);
-                    const z = hoveredColumn % BOARD_SIZE;
-                    
-                    // Find the highest empty position
-                    let topY = 0;
-                    for (let y = 0; y < BOARD_SIZE; y++) {
-                        if (gameBoard[x][y][z] === 0) {
-                            topY = y;
-                            break;
-                        }
-                    }
-                    
-                    // Get position for visual feedback
-                    const totalSize = BOARD_SIZE * (CELL_SIZE + SPACING);
-                    const xPos = x * (CELL_SIZE + SPACING) - totalSize / 2 + CELL_SIZE / 2 + SPACING / 2;
-                    const yPos = topY * (CELL_SIZE + SPACING) - totalSize / 2 + CELL_SIZE / 2 + SPACING / 2;
-                    const zPos = z * (CELL_SIZE + SPACING) - totalSize / 2 + CELL_SIZE / 2 + SPACING / 2;
-                    
-                    // Show feedback
-                    playClickFeedback(new THREE.Vector3(xPos, yPos, zPos));
-                    
-                    // Make the move
-                    makeMove(hoveredColumn, 1);
-                    return;
-                }
-                
-                // Fallback to regular click processing
-                if (event.type === 'touchend') {
-                    // For touch events, create a synthetic mouse event
-                    const syntheticEvent = {
-                        clientX: pointerUpPosition.x,
-                        clientY: pointerUpPosition.y
-                    };
-                    processClick(syntheticEvent);
-                } else {
-                    processClick(event);
-                }
-            }
-        }
-
-        // Update processClick to show visual feedback
-        function processClick(event) {
-            if (gameOver || currentPlayer !== 1) return;
-            
-            // Calculate mouse position for raycasting
-            const mouse = new THREE.Vector2();
-            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-            
-            const raycaster = new THREE.Raycaster();
-            raycaster.setFromCamera(mouse, camera);
-            
-            // Get the point where the user clicked
-            let clickPosition = null;
-            let columnIndex = -1;
-            
-            // First try using the hovered column (most reliable)
-            if (hoveredColumn !== null) {
-                columnIndex = hoveredColumn;
-                
-                // Get the column position
-                const x = Math.floor(columnIndex / BOARD_SIZE);
-                const z = columnIndex % BOARD_SIZE;
-                
-                // Find the highest empty position to show feedback
-                let topY = 0;
-                for (let y = 0; y < BOARD_SIZE; y++) {
-                    if (gameBoard[x][y][z] === 0) {
-                        topY = y;
-                        break;
-                    }
-                }
-                
-                // Get click position for visual feedback
-                const totalSize = BOARD_SIZE * (CELL_SIZE + SPACING);
-                const xPos = x * (CELL_SIZE + SPACING) - totalSize / 2 + CELL_SIZE / 2 + SPACING / 2;
-                const yPos = topY * (CELL_SIZE + SPACING) - totalSize / 2 + CELL_SIZE / 2 + SPACING / 2;
-                const zPos = z * (CELL_SIZE + SPACING) - totalSize / 2 + CELL_SIZE / 2 + SPACING / 2;
-                
-                clickPosition = new THREE.Vector3(xPos, yPos, zPos);
-                
-                // Show visual feedback
-                playClickFeedback(clickPosition);
-                
-                // Make the move
-                makeMove(columnIndex, 1);
-                return;
-            }
-            
-            // Check for intersections with cubes
-            const intersectsCubes = raycaster.intersectObjects(cubes);
-            
-            if (intersectsCubes.length > 0) {
-                const cube = intersectsCubes[0].object;
-                clickPosition = intersectsCubes[0].point;
-                const { x, z } = cube.userData;
-                columnIndex = x * BOARD_SIZE + z;
-                
-                // Show visual feedback
-                playClickFeedback(clickPosition);
-                
-                // Make the move
-                makeMove(columnIndex, 1);
-                return;
-            }
-            
-            // Check for column hitboxes
-            const intersectsColumns = raycaster.intersectObjects(columnHitboxes);
-            
-            if (intersectsColumns.length > 0) {
-                clickPosition = intersectsColumns[0].point;
-                columnIndex = intersectsColumns[0].object.userData.columnIndex;
-                
-                // Show visual feedback
-                playClickFeedback(clickPosition);
-                
-                // Make the move
-                makeMove(columnIndex, 1);
-            }
-        }
-
-        // Update playClickFeedback to not show the inner grid
-        function playClickFeedback(position) {
-            // Create a ripple effect at the click position
-            const rippleGeometry = new THREE.RingGeometry(0.1, 0.4, 32);
-            const rippleMaterial = new THREE.MeshBasicMaterial({
-                color: 0xffffff,
-                transparent: true,
-                opacity: 0.7,
-                side: THREE.DoubleSide
-            });
-            
-            const ripple = new THREE.Mesh(rippleGeometry, rippleMaterial);
-            
-            // Position the ripple at the click point but slightly above
-            ripple.position.copy(position);
-            ripple.position.y += 0.01;
-            
-            // Make ripple face the camera
-            ripple.lookAt(camera.position);
-            
-            scene.add(ripple);
-            
-            // NO LONGER showing all cubes when clicking
-            // Instead, we'll just animate the ripple effect
-            
-            const startTime = Date.now();
-            const duration = 500; // ms
-            
-            function animateRipple() {
-                const elapsed = Date.now() - startTime;
-                const t = elapsed / duration;
-                
-                if (t < 1) {
-                    // Scale up and fade out
-                    const scale = 0.5 + t * 2;
-                    ripple.scale.set(scale, scale, scale);
-                    rippleMaterial.opacity = 0.7 * (1 - t);
-                    
-                    requestAnimationFrame(animateRipple);
-                } else {
-                    // Remove ripple when animation is done
-                    scene.remove(ripple);
-                }
-            }
-            
-            animateRipple();
         }
 
         // Update the createOuterCube function to make the grid outline fully visible
