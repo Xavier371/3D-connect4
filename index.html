@@ -79,7 +79,7 @@
         /* Media queries for mobile devices */
         @media (max-width: 768px) {
             #info {
-                font-size: 20px;
+                font-size: 18px;
                 top: 5px;
             }
             #resetBtn, #modeBtn {
@@ -93,16 +93,43 @@
                 bottom: 70px;
             }
             #spacing-slider {
-                width: 80%;
-                max-width: 300px;
+                width: 70%;
+                max-width: 250px;
             }
             #resetButton {
-                padding: 8px 20px;
-                font-size: 14px;
+                padding: 6px 14px;
+                font-size: 13px;
+                border-radius: 15px;
+            }
+            .toggle-group {
+                border-radius: 15px;
             }
             .toggle-group button {
-                padding: 8px 20px;
-                font-size: 14px;
+                padding: 5px 12px;
+                font-size: 13px;
+            }
+            #button-container {
+                gap: 10px;
+                bottom: 12px;
+            }
+        }
+        /* Specific fixes for very small screens */
+        @media (max-width: 360px) {
+            #resetButton {
+                padding: 4px 10px;
+                font-size: 12px;
+                border-radius: 12px;
+            }
+            .toggle-group {
+                border-radius: 12px;
+            }
+            .toggle-group button {
+                padding: 4px 10px;
+                font-size: 12px;
+            }
+            #button-container {
+                gap: 8px;
+                bottom: 10px;
             }
         }
         /* Fix for iOS input styling */
@@ -347,42 +374,47 @@
             // Prevent context menu on right-click
             renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
             
-            // Reset button
-            document.getElementById('resetButton').addEventListener('click', function(e) {
-                // Stop event propagation to prevent clicks passing through to the game
+            // Reset button - ensure it works on mobile
+            const resetButton = document.getElementById('resetButton');
+            resetButton.addEventListener('click', function(e) {
                 e.stopPropagation();
                 resetGame();
             });
-            document.getElementById('resetButton').addEventListener('touchend', function(e) {
-                // Stop event propagation to prevent touches passing through to the game
+            resetButton.addEventListener('touchend', function(e) {
                 e.stopPropagation();
                 e.preventDefault();
                 resetGame();
             });
             
-            // Two-player mode button
-            document.getElementById('twoPlayerButton').addEventListener('click', function(e) {
+            // Setup mode toggle buttons with proper mobile support
+            const onePlayerButton = document.getElementById('onePlayerButton');
+            const twoPlayerButton = document.getElementById('twoPlayerButton');
+            
+            // One-player mode button with mobile support
+            onePlayerButton.addEventListener('click', function(e) {
                 e.stopPropagation();
+                toggleOnePlayerMode();
             });
-            document.getElementById('twoPlayerButton').addEventListener('touchend', function(e) {
+            onePlayerButton.addEventListener('touchend', function(e) {
                 e.stopPropagation();
                 e.preventDefault();
+                toggleOnePlayerMode();
             });
             
-            // One-player mode button
-            document.getElementById('onePlayerButton').addEventListener('click', function(e) {
+            // Two-player mode button with mobile support
+            twoPlayerButton.addEventListener('click', function(e) {
                 e.stopPropagation();
+                toggleTwoPlayerMode();
             });
-            document.getElementById('onePlayerButton').addEventListener('touchend', function(e) {
+            twoPlayerButton.addEventListener('touchend', function(e) {
                 e.stopPropagation();
                 e.preventDefault();
+                toggleTwoPlayerMode();
             });
             
             // Spacing slider
             document.getElementById('spacing-slider').addEventListener('input', (e) => {
-                // Stop propagation to prevent clicks passing through
                 e.stopPropagation();
-                // Convert slider value (0-100) to a scale factor (0.5-1.5)
                 GLOBAL_SCALE = 0.5 + (e.target.value / 100) * 1.0;
                 updateSceneScale();
             });
@@ -400,50 +432,36 @@
             // Apply initial scene scale
             updateSceneScale();
 
-            // Initialize at document load
-            document.addEventListener('DOMContentLoaded', function() {
-                // Set the initial active button based on mode
-                const onePlayerButton = document.getElementById('onePlayerButton');
-                const twoPlayerButton = document.getElementById('twoPlayerButton');
-                const resetButton = document.getElementById('resetButton');
-                
-                if (isTwoPlayerMode) {
-                    twoPlayerButton.classList.add('active');
-                    onePlayerButton.classList.remove('active');
-                } else {
-                    onePlayerButton.classList.add('active');
-                    twoPlayerButton.classList.remove('active');
-                }
-                
-                // Setup event listeners for buttons
-                onePlayerButton.addEventListener('click', function(e) {
-                    e.stopPropagation();
-                    isTwoPlayerMode = false;
-                    onePlayerButton.classList.add('active');
-                    twoPlayerButton.classList.remove('active');
-                    resetGame();
-                    updateInfo("Player 1's Turn (Red)");
-                });
-                
-                twoPlayerButton.addEventListener('click', function(e) {
-                    e.stopPropagation();
-                    isTwoPlayerMode = true;
-                    twoPlayerButton.classList.add('active');
-                    onePlayerButton.classList.remove('active');
-                    resetGame();
-                    updateInfo("Player 1's Turn (Red)");
-                });
-                
-                resetButton.addEventListener('click', function(e) {
-                    e.stopPropagation();
-                    resetGame();
-                    if (isTwoPlayerMode) {
-                        updateInfo("Player 1's Turn (Red)");
-                    } else {
-                        updateInfo("Your Turn");
-                    }
-                });
-            });
+            // Set the initial active button based on mode
+            if (isTwoPlayerMode) {
+                twoPlayerButton.classList.add('active');
+                onePlayerButton.classList.remove('active');
+            } else {
+                onePlayerButton.classList.add('active');
+                twoPlayerButton.classList.remove('active');
+            }
+        }
+        
+        // Toggle to one-player mode
+        function toggleOnePlayerMode() {
+            if (isTwoPlayerMode) {
+                isTwoPlayerMode = false;
+                document.getElementById('onePlayerButton').classList.add('active');
+                document.getElementById('twoPlayerButton').classList.remove('active');
+                resetGame();
+                updateInfo("Your Turn");
+            }
+        }
+
+        // Toggle to two-player mode
+        function toggleTwoPlayerMode() {
+            if (!isTwoPlayerMode) {
+                isTwoPlayerMode = true;
+                document.getElementById('twoPlayerButton').classList.add('active');
+                document.getElementById('onePlayerButton').classList.remove('active');
+                resetGame();
+                updateInfo("Player 1's Turn (Red)");
+            }
         }
         
         // Create the grid structure with cubes
