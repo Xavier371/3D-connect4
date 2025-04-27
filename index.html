@@ -84,7 +84,7 @@
             }
             #resetBtn, #modeBtn {
                 bottom: 15px;
-                padding: 12px 24px;
+                padding: 8px 20px;
             }
             #modeBtn {
                 right: 10px;
@@ -95,6 +95,14 @@
             #spacing-slider {
                 width: 80%;
                 max-width: 300px;
+            }
+            #resetButton {
+                padding: 8px 20px;
+                font-size: 14px;
+            }
+            .toggle-group button {
+                padding: 8px 20px;
+                font-size: 14px;
             }
         }
         /* Fix for iOS input styling */
@@ -194,7 +202,6 @@
     <div id="info">3D Connect 4 - Your Turn</div>
     <div id="controls">
         <input type="range" id="spacing-slider" min="0" max="100" value="50">
-        <span>Cube Scaling</span>
     </div>
     <div id="button-container">
         <div class="toggle-group">
@@ -524,7 +531,9 @@
             
             for (let x = 0; x < BOARD_SIZE; x++) {
                 for (let z = 0; z < BOARD_SIZE; z++) {
-                    const geometry = new THREE.BoxGeometry(CELL_SIZE, totalSize, CELL_SIZE);
+                    // Use a slightly smaller hitbox for better precision
+                    const hitboxSize = CELL_SIZE * 0.95;
+                    const geometry = new THREE.BoxGeometry(hitboxSize, totalSize, hitboxSize);
                     const material = new THREE.MeshBasicMaterial({ 
                         transparent: true, 
                         opacity: 0.0
@@ -575,9 +584,11 @@
                 // Clear highlight
                 clearHighlight();
                 
-                // First check for directly clicked columns
+                // Check for column hitboxes first - this is the most reliable method
                 const intersectsColumns = raycaster.intersectObjects(columnHitboxes);
                 if (intersectsColumns.length > 0) {
+                    // Sort intersections by distance
+                    intersectsColumns.sort((a, b) => a.distance - b.distance);
                     const columnIndex = intersectsColumns[0].object.userData.columnIndex;
                     console.log("Processing click on column:", columnIndex);
                     
@@ -589,6 +600,8 @@
                 // Then check for cube intersections
                 const intersectsCubes = raycaster.intersectObjects(cubes);
                 if (intersectsCubes.length > 0) {
+                    // Sort intersections by distance
+                    intersectsCubes.sort((a, b) => a.distance - b.distance);
                     const cube = intersectsCubes[0].object;
                     const { x, z } = cube.userData;
                     const columnIndex = x * BOARD_SIZE + z;
@@ -607,7 +620,7 @@
                 }
             };
             
-            // Define our new touch handler
+            // Define our touch handler
             touchEndHandler = function(event) {
                 // Don't process if game is over
                 if (gameOver) return;
@@ -638,9 +651,11 @@
                     // Clear highlight
                     clearHighlight();
                     
-                    // Direct column detection
+                    // Check for column hitboxes first
                     const intersectsColumns = raycaster.intersectObjects(columnHitboxes);
                     if (intersectsColumns.length > 0) {
+                        // Sort intersections by distance
+                        intersectsColumns.sort((a, b) => a.distance - b.distance);
                         const columnIndex = intersectsColumns[0].object.userData.columnIndex;
                         console.log("Processing touch on column:", columnIndex);
                         
@@ -652,6 +667,8 @@
                     // Then check for cube intersections
                     const intersectsCubes = raycaster.intersectObjects(cubes);
                     if (intersectsCubes.length > 0) {
+                        // Sort intersections by distance
+                        intersectsCubes.sort((a, b) => a.distance - b.distance);
                         const cube = intersectsCubes[0].object;
                         const { x, z } = cube.userData;
                         const columnIndex = x * BOARD_SIZE + z;
@@ -709,13 +726,13 @@
             const raycaster = new THREE.Raycaster();
             raycaster.setFromCamera(mouse, camera);
             
-            // First, check for intersections with cubes
-            const intersectsCubes = raycaster.intersectObjects(cubes);
+            // First check for column hitboxes - most accurate
+            const intersectsColumns = raycaster.intersectObjects(columnHitboxes);
             
-            if (intersectsCubes.length > 0) {
-                const cube = intersectsCubes[0].object;
-                const { x, z } = cube.userData;
-                const columnIndex = x * BOARD_SIZE + z;
+            if (intersectsColumns.length > 0) {
+                // Sort intersections by distance to get the closest one
+                intersectsColumns.sort((a, b) => a.distance - b.distance);
+                const columnIndex = intersectsColumns[0].object.userData.columnIndex;
                 
                 // Only highlight if this is a different column
                 if (hoveredColumn !== columnIndex) {
@@ -726,11 +743,15 @@
                 return;
             }
             
-            // If no cubes hit, check column hitboxes
-            const intersectsColumns = raycaster.intersectObjects(columnHitboxes);
+            // If no hitboxes hit, try cubes as fallback
+            const intersectsCubes = raycaster.intersectObjects(cubes);
             
-            if (intersectsColumns.length > 0) {
-                const columnIndex = intersectsColumns[0].object.userData.columnIndex;
+            if (intersectsCubes.length > 0) {
+                // Sort intersections by distance
+                intersectsCubes.sort((a, b) => a.distance - b.distance);
+                const cube = intersectsCubes[0].object;
+                const { x, z } = cube.userData;
+                const columnIndex = x * BOARD_SIZE + z;
                 
                 // Only highlight if this is a different column
                 if (hoveredColumn !== columnIndex) {
@@ -1065,7 +1086,7 @@
                     count++;
                     nx += directions[i][0];
                     ny += directions[i][1];
-                    nz += directions[i][2];
+                    ny += directions[i][2];
                 }
                 
                 // Check in negative direction
